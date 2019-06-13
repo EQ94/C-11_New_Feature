@@ -1,0 +1,12 @@
+C++11 并发指南
+
+C++11新标准引入了四个头文件支持多线程编程，，分别是<atomic>,<thread>,<mutex>,<condition_variable>和<future>
+<atomic>:声明了两个类，std::atomic和std::atomic_flag,另外还有一套C风格的原子类型和与C兼容的原子操作的函数。
+<thread>:声明了std::thread类，另外std::this_thread命名空间也在该头文件中。
+<mutex>:声明了与互斥量（mutex）相关的类，包括std::mutex系列类，std::lock_guard，std::unique_lock，以及其他的类型和函数
+<condition_variable>:声明了与条件变量相关的类，包括std::condition_variable和std::condition_variable_any。
+<future>:声明了std::promise,std::package_task两个provider类，以及std::future和std::shared_future两个future类，另外还有一些与之相关的类型和函数，std::async()函数就生命在此头文件中。
+
+ref()函数：ref()函数的返回值reference_wrapper类类型，reference_wrapper<T>是个类模板，用来模仿一个类型为T的对象的“引用”，使用起来就像是引用一样，不过reference_wrapper<T>对象是可以拷贝构造和赋值构造的【针对于对象的一种引用操作】
+
+... 未完待续
