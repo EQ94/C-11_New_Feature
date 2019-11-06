@@ -1,3 +1,10 @@
 C++11的新特性学习与总结
 
 不定期更新 :)
+
+右值引用
+原子操作
+const&constexpr
+lambda
+thread
+CAS(compare and swap)

@@ -1,0 +1,187 @@
+const和constexpr的区别：
+
+const 所定义的变量，一经初始化便不能修改，但是不要求const所定义变量在编译的时候就能被算出。
+constexpr 定义的变量要求，变量在程序被编译的时候就能被判定为常量，否则出错。
+总结来说，constexpr 定义的变量“常量的属性” 比const 所定义的变量更彻底
+
+
+######################################################
+
+语义上：
+constexpr：告诉编译器我可以是编译期间可知的，尽情的优化我吧。
+const：告诉程序员没人动得了我，放心的把我传出去；或者放心的把变量交给我，我啥也不动就瞅瞅。
+
+语法上：
+constexpr是一种比const 更严格的束缚, 它修饰的表达式本身在编译期间可知, 并且编译器会尽可能的 evaluate at compile time. 在constexpr 出现之前, 可以在编译期初始化的const都是implicit constexpr. 直到c++ 11, constexpr才从const中细分出来成为一个关键字, 而 const从1983年 c++ 刚改名的时候就存在了
+
+######################################################
+
+https://blog.csdn.net/qq_22274565/article/details/78719951
+
+C++之父：
+const：大致意思是说我承诺不改变这个值，主要用于说明接口，这样变量传递给函数就不担心变量会在函数内被修改了编译器负责确认并执行const的承诺。
+constexpr：大致意思是在编译时求值，主要用于说明常量，作用是允许数据置于只读内存以及提升性能。
+
+对于修饰Object来说，
+const并未区分出编译期常量和运行期常量
+constexpr限定在了编译期常量
+
+
+基本含义/语法
+const和constexpr都可以来修饰对象和函数。
+
+修饰对象的时候两者之间最基本的区别是：
+1.const修饰一个对象表示它是常量。这暗示对象一经初始化就不会再变动了，并且允许编译器使用这个特点优化程序。这也防止程序员修改了本不应该修改的对象。
+2.constexpr是修饰一个常量表达式。但请注意constexpr不是修饰常量表达式的唯一途径。
+
+
+修饰函数的时候两者之间最基本的区别是：
+1.const只能用于非静态成员的函数（静态成员函数并不包含this指针，也就不存在const来修饰他了）而不是所有函数。它保证成员函数不修改任何非静态数据。
+2.constexpr可以用于含参和无参函数。constexpr函数适用于常量表达式，只有在下面的情况下编译器才会接受constexpr函数：
+a.函数体必须足够简单，除了typedef和静态元素，只允许有return语句。如构造函数只能有初始化列表，typedef和静态元素 (实际上在C++14标准中已经允许定义语句存在于constexpr函数体内了)
+b.参数和返回值必须是字面值类型
+
+
+######################################################
+
+
+常量表达式：
+
+常量表达式概念：
+必须可以在编译阶段被识别的，比如模板的参数/数组的大小
+1.template <int N>
+class fixed_size_list
+{ /*...*/ };
+
+2.fixed_size_list<X> mylist;     //X必须是字面值类型
+
+3.int numbers[X];   //  X必须是字面值类型
+
+但是注意下面两点：
+a. 用constexpr修饰某物并不保证它一定在编译时被计算，也可以在运行时被计算。
+b. 不用constexpr也可能是一个常量表达式，如
+    int main()
+    {
+        const int N = 3;
+        int num[N] = {1,2,3,};//N是一个常量表达式
+    }
+    //N在声明时初始化，满足常量表达式的标准，虽然没用constexpr
+
+所以到底什么时候用constexpr?
+
+像上面的N，虽然没有用 constexpr 仍然是一个常量表达式。事实上，const本身和它的枚举类型若在声明时初始化那么就是一个常量表达式。
+在函数中若有常量表达式那么必须用constexpr，仅仅满足常量表达式的条件是不够的，如
+template <int N>
+class list{ };
+
+constexpr int sqr1(int arg) { return arg*arg; }
+
+int sqr2(int arg) { return arg*arg; }
+
+int main() {
+const int X = 2;
+
+list<sqr1(X)> mylist1;//可以，因为sqr1时constexpr函数
+list<sqr2(X)> mylist2;//不可以，因为sqr2不是constexpr函数
+return 0;
+}
+
+
+什么时候该同时使用两者？
+
+在修饰变量的时候,修饰变量时没有必要同时使用const和constexpr 因为constexpr包含了 const的含义
+constexpr const int N = 5;
+constexpr int N = 5;
+//两行的意思完全相同
+
+然而注意有一些情况const和constexpr在修饰不同的东西，比如
+static constexpr int N = 3;
+int main()
+{
+    constexpr const int *NP = &N
+    return 0;
+}
+在这里constexpr和const都必须要有。constexpr表示NP指针本身是常量表达式，而const表示指向的值是一个常量。去掉const之后无法编译，因为不能用普通指针指向常量。
+
+
+在修饰成员函数的时候
+在C++11中，对成员函数而言constexpr同样包含const的含义。然而在C++14中可能已经改变了。如
+constexpr void f();
+以后可能必须写成
+constexpr void f() const;
+
+
+
+类成员变量：
+./*.h:
+class A {
+ public:
+    static std::string str;
+ private:
+    static const std::string kConfigPrefix;
+    static const constexpr char *kMtest = "test";
+};
+
+./*.cc
+std::string A::str = "test";
+const std::string A::kConfigPrefix = "Test";
+// kMtest 无需再次赋值，初始化操作
+void main() {
+    ...
+}
+
+
+######################################################
+
+https://blog.csdn.net/pursue_my_life/article/details/79842204
+
+对于修饰Object来说:
+const并未区分出编译期常量和运行期常量
+constexpr限定在了编译期常量
+目的：  提高效率。因为编译器知道这是一个常量，所以可以优化代码，比如整个 function 全部优化掉。
+
+
+对于修饰的函数来说: [constexpr修饰的函数，返回值不一定是编译期常量。]
+#include <iostream>
+#include <array>
+using namespace std;
+ 
+constexpr int foo(int i)
+{
+    return i + 5;
+}
+ 
+int main()
+{
+    int i = 10;
+    std::array<int, foo(5)> arr; // OK
+    
+    foo(i); // Call is Ok
+    
+    // But...
+    std::array<int, foo(i)> arr1; // Error
+   
+}
+
+
+对于constexpr修饰的函数
+   if( 传入的参数可以在编译时期计算出来 ) {
+        那么这个函数就会产生编译时期的值
+    } else {
+        那么constexpr修饰的函数就和普通函数一样了。
+    }
+我们不必因此而写两个版本，所以如果函数体适用于constexpr函数的条件，可以尽量加上constexpr。
+
+
+检测constexpr函数是否产生编译时期值的方法：
+     就是利用std::array需要编译期常值才能编译通过的小技巧。这样的话，即可检测你所写的函数是否真的产生编译期常值了。
+
+
+
+
+内联函数与constexpr的区别
+inline函数  —— 在编译期 将所有inline修饰的函数替换为 整个代码。（可以想象为复制粘贴，很像宏替换但却不是宏替换）
+                （当然编译器会去判断这个能不能作为 inline  函数） 
+
+constexpr  —— 在编译期算出来constexpr 所修饰的函数的值 ——> 运行期调用函数时，用编译期算出来的值进行替换。
+                （当然编译器会去判断这个能不能作为 constexpr  函数）
