@@ -1,0 +1,184 @@
+C++内存管理之shared_ptr
+
+C++动态内存的管理是通过new和delete来完成的，只要保证new和delete的配对使用，是没有问题的。但是有时候我们会忘记释放内存，甚至有时候我们根本不知道什么时候释放内存。特别是在多个线程共享数据时，更难判断内存该如何释放。这种情况下，机器容易产生引用非法内存的指针。
+
+C++11提供了两种只能指针类型来管理动态对象。智能指针的行为类似于常规指针。重要的区别是它负责自动释放所指向的对象。新标准提供的这两种智能指针的区别在于管理底层指针的方式：shared_ptr允许多个指针指向同一个对象；unique_ptr则独占所指向的对象。
+标准库还定义了一个weak_ptr的伴随类，他是一种弱引用，指向shared_ptr所管理的对象。这三种类型都定义在memory头文件中。
+
+shared_ptr<T> p         // 空智能指针，可以指向类型为T的对象
+unique_ptr<T> p
+p                       // 将p用作一个判断条件，若p指向一个对象，则为true
+*p                      // 解引用p所获得它指向的对象
+p->get()                // 返回p中保存的指针。要小心使用，若智能指针释放了其对象返回的指针所指
+                            向的对象也就消失了，所以尽量不要把裸指针取出来
+swap(p,q)               // 交换p/q指针
+p.swap(q)
+
+shared_ptr<T> p(q)      // p管理内置指针q所指向的对象；q必须指向new分配的内存，且能够转换为T*类型
+shared_ptr<T> p(u)      // p从unique_ptr u那里接管了对象的所有权。将u置为空
+shared_ptr<T> p(q,d)    // p从接管了内置指针q所指向的对象的所有权，q必须能转换为T*类型。
+                            p使用可调用的对象d来替代delete
+shared_ptr<T> p(p2,d)   // p是shared_ptr p2的拷贝，唯一的区别就是p将调用d来替代delete
+p.reset()               // 若p是唯一指向其对象的shared_ptr，reset会释放此对象。
+p.reset(q)              // 若传递了可选的参数内置指针q，会另p指向q，否则会将p为空
+p.reser)q,d)            // 若还传递了参数d，将会调用d而不是delete来释放q
+
+
+###########################################################
+https://www.cnblogs.com/yinbiao/p/11563520.html
+
+C++ 对指针的管理提供了两种解决思路：
+1. 不允许多个对象管理一个指针
+2. 允许多个对象管理一个指针，但仅当管理这个指针的最后一个对象析构时才调用delete
+
+ps： 这两种思路的共同点就是只允许delete一次 【share_ptr采用思路1】
+ps:  智能指针不是指针，而是类，可以实例化为一个对象，来管理裸指针
+
+shared_ptr实现原理：
+shared_ptr最本质的功能：“当多个shared_ptr管理同一个指针，仅当最后一个share_ptr析构时，指针才被delete”。该功能是通过引用计数法实现的。
+
+1. 引用计数法的规则：
+    1. 所有管理同一个裸指针的shared_ptr，都共享一个引用计数器
+    2. 每当一个shared_ptr被赋值给其他shared_ptr时，这个共享的引用计数器就加1
+    3. 每当一个shared_ptr析构或被用于管理其他裸指针是，这个引用计数器就减1
+    4. 如果此时发现引用计数器为0，那么说明他是管理这个指针的最后一个shared_ptr了，于是我们释放指针指向的资源
+
+2. 引用计数法的内部实现：
+    1. 这个引用计数器保存在某个内部类型中，而这个内部类型对象在shared_ptr第一次构造时以指针的形式保存在shared_ptr中
+    2. shared_ptr重载了赋值运算符，在赋值和拷贝另个一个shared_ptr时，这个指针被另一个shared_ptr共享
+    3. 在引用计数归0时，这个内部类型指针与shared_ptr管理的资源一起释放
+    4. 此外，为了保证线程安全，引用计数器加1和减1都是原子操作，保证了shared_ptr由多个线程共享时不会爆掉
+
+shared_ptr的使用：
+#include<iostream>
+#include<stdio.h>
+#include<string>
+#include<memory>
+using namespace std;
+
+int main()
+{
+    //初始化 方法1:
+    shared_ptr<string> sptr1(new string("name"));
+    //初始化 方法2:
+    shared_ptr<string> sptr2=make_shared<string>("sex");
+    //初始化 方法3:
+    int *p =new int(10);
+    shared_ptr<int> sptr3(p); //这种初始化的方式很危险,delete p之后,strp3也不再有效
+}
+
+相关成员函数:
+
+1）use_count：返回引用计数的个数
+2）unique:返回是否独占所有权(use_count=1)
+3）swap:交换两个share_ptr对象(即交换所拥有的对象)
+4）reset:放弃内部对象的所有权或拥有对象的变更，会引起原有对象引用计数的减少
+5）get:返回内部对象指针
+
+
+3. 引用计数最大的缺点:循环引用
+车祸现场如下：
+class Observer; // 前向声明
+class Subject   // 目标类
+{
+private:
+    std::vector<shared_ptr<Observer>> observers;    // 维护观察者数组，可以遍历观察者数组，方便对观察者进行通知
+public:
+    Subject() {}
+    addObserver(shared_ptr<Observer> ob)
+    {
+        observers.push_back(ob);
+    }
+    // 其它代码
+};
+
+class Observer  // 观察者
+{
+private:
+    shared_ptr<Subject> object;   // 保留目标类的shared_ptr
+public:
+    Observer(shared_ptr<Object> obj) : object(obj) {}
+    
+    // 其它代码
+};
+目标类 subject 连接这多个观察者类，当某个事件发生时，目标类可以遍历观察者数组observers，对观察者进行通知，而观察者类中也保留着目标类的shared_ptr；
+这样多个观察者之间可以以目标类为桥梁进行沟通，除了会发生内存泄漏外，这还是一种很不错的设计模式嘛……
+
+这里产生内存泄漏的原因就是循环引用，循环引用指的是一个引用通过一系列的引用链，竟然引回到自身；
+在上面的例子中，subject->observer->subject就是这么一条环形引用链，假设我们程序中只有一个变量shared_ptr<sbuject> p，此时p指向的对象不仅通过shared_ptr引向自己，还通过它包含的observer中的object成员变量引回自己，于是它的引用计数是2，每个observer的引用计数都是1，当p析构时，它的引用计数2-1=1，大于0，其析构函数不会被调用，于是p和它包含的每个observer对象在程序结束时依然驻留在内存中，没有被delete，从而造成了内存泄漏
+
+
+
+4. 采用weak_ptr（弱引用）解决循环引用的问题:
+
+标准库提供了std::weak_ptr,weak_ptr是shared_ptr的观察者，它与一个shared_ptr绑定，但是却不参与引用计数的计算，在需要时，它还能生成一个与它所观察的shared_ptr共享引用计数器的新的shared_ptr，总而言之，weak_ptr的作用就是:在需要时生成一个与绑定的shared_ptr共享引用计数器的新shared_ptr，在其他时候不干扰绑定的shared_ptr的引用计数
+
+weak_ptr相关成员函数:
+
+1)lock：获得一个和绑定的shared_ptr共享引用计数器的新的shared_ptr
+
+2)expired:功能等价于判断use_count是否等于0，但是速度更快
+
+继续引用上面subject和observer的例子，来解决循环引用的问题：
+
+将上述例子中，observer中object成员的类型换成weak_ptr<subject>即可解决内存泄漏的问题，因为之前的observer中object成员的subject参与了引用计数，替换成weak_ptr<subject>之后没有参与引用计数，这样以来，p指向对象的引用计数为1，所以在p析构时，subject指针将被delete，其中包含的observer数组在析构时，内部的observer对象的引用计数也为0，所以他们也被deleete了，不存在内存泄漏的问题了
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
